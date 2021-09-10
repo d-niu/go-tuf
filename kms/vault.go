@@ -22,7 +22,7 @@ type hashiVaultClient struct {
 	transitSecretEnginePath string
 }
 
-//TODO: what about using const inputs?
+//TODO: Consider moving logic for getting vault addr and vault token to outside of the function and send a parameters into the function
 func newHashiVaultClient(transitPath string) (*hashiVaultClient, error) {
 	address := os.Getenv("VAULT_ADDR")
 	if address == "" {
@@ -100,7 +100,6 @@ func (hv *hashiVaultClient) GetPublicKey(newkeypath string) (*data.Key, error){
 func (hv *hashiVaultClient) Sign() {
 	return
 }
-
 
 func (hv *hashiVaultClient) Verify()  {
 	return
