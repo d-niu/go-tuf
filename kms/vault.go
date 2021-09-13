@@ -18,11 +18,12 @@ func HVClient(keyResourceID string) (KMSClient, error) {
 }
 
 type hashiVaultClient struct {
-	client	*vault.Client
-	transitSecretEnginePath string
+	client			*vault.Client
+	transitPath 	string
 }
 
-//TODO: Consider moving logic for getting vault addr and vault token to outside of the function and send a parameters into the function
+//TODO: Parameterize getting vault address and tokens.
+//TODO: Add error messages to the package
 func newHashiVaultClient(transitPath string) (*hashiVaultClient, error) {
 	address := os.Getenv("VAULT_ADDR")
 	if address == "" {
@@ -43,19 +44,19 @@ func newHashiVaultClient(transitPath string) (*hashiVaultClient, error) {
 	}
 	client.SetToken(token)
 
+	//do we need transit path if we're calling hv client on a method-needed basis?
 	hvClient := &hashiVaultClient{
 		client: client,
-		transitSecretEnginePath: transitPath,
+		transitPath: transitPath,
 	}
 
 	return hvClient, nil
 }
 
 //CreateKey: returns the result of a request to generate a ed25519 key in Vault (data.Key Type and Scheme not parameterized atm).
-func (hv *hashiVaultClient) CreateKey(params map[string]interface{}, keyname string) (error) {
-	//TODO: Create with Role (key role or creator role). Investigate if we need this functoinality
-	//equivalent of cli 'vault write -f keymgmt/key/example-key type '
-	newkeypath := fmt.Sprintf("%s%s", hv.transitSecretEnginePath, keyname)
+func (hv *hashiVaultClient) CreateKey(params map[string]interface{}, keyName string) (error) {
+	//TODO: Create with Role (key role or creator role).
+	newkeypath := fmt.Sprintf("%s%s", hv.transitPath, keyName)
 	_, err := hv.client.Logical().Write(newkeypath, params)
 	if err != nil {
 		return err
@@ -63,8 +64,8 @@ func (hv *hashiVaultClient) CreateKey(params map[string]interface{}, keyname str
 	return  nil
 }
 
-func (hv *hashiVaultClient) GetPublicKey(newkeypath string) (*data.Key, error){
-	secret, err := hv.client.Logical().Read(newkeypath)
+func (hv *hashiVaultClient) GetPublicKey(keyName string) (*data.Key, error){
+	secret, err := hv.client.Logical().Read(fmt.Sprintf("%s%s", hv.transitPath, keyName))
 	if err != nil {
 		return nil, errors.New("Failed to read transit secret engine keys: http get failure")
 	}
@@ -97,8 +98,17 @@ func (hv *hashiVaultClient) GetPublicKey(newkeypath string) (*data.Key, error){
 	return &publickey, nil
 }
 
-func (hv *hashiVaultClient) Sign() {
-	return
+func (hv *hashiVaultClient) Sign(params map[string]interface{}, keyName string) (string, error) {
+	signingPath := fmt.Sprintf("%s%s", hv.transitPath, keyName)
+	secret, err := hv.client.Logical().Write(signingPath, params)
+	if err != nil {
+		return "", err
+	}
+	cipherData, ok := secret.Data["signature"].(string)
+	if !ok {
+		return "", errors.New("Failed to encrypt in transit secret engine: signature corrupted.")
+	}
+	return cipherData, nil
 }
 
 func (hv *hashiVaultClient) Verify()  {

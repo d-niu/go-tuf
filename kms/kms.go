@@ -10,7 +10,7 @@ type KMSClient interface {
 	//TODO: Handle different key types. Further, change publickey back to data.Publickey type to fit into the implementation
 	CreateKey(params map[string]interface{}, keyname string) (err error)
 
-	Sign()
+	Sign(params map[string]interface{}, keyname string) (ciphertext string, err error)
 
 	Verify()
 
