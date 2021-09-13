@@ -65,13 +65,13 @@ func (hv *hashiVaultClient) CreateKey(params map[string]interface{}, keyName str
 }
 
 func (hv *hashiVaultClient) GetPublicKey(keyName string) (*data.Key, error){
-	secret, err := hv.client.Logical().Read(fmt.Sprintf("%s%s", hv.transitPath, keyName))
+	response, err := hv.client.Logical().Read(fmt.Sprintf("%s%s", hv.transitPath, keyName))
 	if err != nil {
 		return nil, errors.New("Failed to read transit secret engine keys: http get failure")
 	}
 
-	keysData, hasKeys := secret.Data["keys"].(map[string]interface{})
-	latestVersion, hasVersion := secret.Data["latest_version"].(json.Number)
+	keysData, hasKeys := response.Data["keys"].(map[string]interface{})
+	latestVersion, hasVersion := response.Data["latest_version"].(json.Number)
 
 	if !hasKeys || !hasVersion {
 		return nil, errors.New("Failed to read transit secret engine keys: corrupted initial response.")
@@ -98,20 +98,31 @@ func (hv *hashiVaultClient) GetPublicKey(keyName string) (*data.Key, error){
 	return &publickey, nil
 }
 
+//TODO: Parse sig data path
 func (hv *hashiVaultClient) Sign(params map[string]interface{}, keyName string) (string, error) {
 	signingPath := fmt.Sprintf("%s%s", hv.transitPath, keyName)
-	secret, err := hv.client.Logical().Write(signingPath, params)
+	response, err := hv.client.Logical().Write(signingPath, params)
 	if err != nil {
-		return "", err
+		return "", errors.New("Failed to sign in transit secret engine: http call failed.")
 	}
-	cipherData, ok := secret.Data["signature"].(string)
+	sigData, ok := response.Data["signature"].(string)
 	if !ok {
-		return "", errors.New("Failed to encrypt in transit secret engine: signature corrupted.")
+		return "", errors.New("Failed to sign in transit secret engine: signature corrupted.")
 	}
-	return cipherData, nil
+	return sigData, nil
 }
 
-func (hv *hashiVaultClient) Verify()  {
-	return
+func (hv *hashiVaultClient) Verify(params map[string]interface{}, keyName string) (bool, error) {
+	verifyPath := fmt.Sprintf("%s%s", hv.transitPath, keyName)
+	fmt.Printf("Passing?")
+	response, err := hv.client.Logical().Write(verifyPath, params)
+	if err != nil {
+		return false, errors.New("Failed to verify in transit secret engine: http call failed.")
+	}
+	valid, ok := response.Data["valid"].(bool)
+	if !ok {
+		return false, errors.New("Failed to verify in transit secret engine: verification response corrupted.")
+	}
+	return valid, nil
 }
 

@@ -12,7 +12,7 @@ type KMSClient interface {
 
 	Sign(params map[string]interface{}, keyname string) (ciphertext string, err error)
 
-	Verify()
+	Verify(params map[string]interface{}, keyname string) (verified bool, err error)
 
 	GetPublicKey(path string) (*data.Key, error)
 }

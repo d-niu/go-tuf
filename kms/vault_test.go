@@ -2,17 +2,18 @@ package kms
 
 import (
 	"encoding/base64"
-	"fmt"
 	"testing"
 )
 
 const(
 	transitSignPath = "/transit/sign/"
+	transitVerifyPath = "/transit/verify/"
 	transitKeyPath = "/transit/keys/"
 	testkeyname1 = "testkey1"
-	testkeyname2 = "example_edsca"
+	dataToSign = "hello"
 )
 
+//Assumes you have a local instance of vault running.
 
 func TestHashiVaultClient_CreateKey(t *testing.T) {
 	hv, err := HVClient(transitKeyPath)
@@ -46,21 +47,37 @@ func TestHashiVaultClient_GetPublicKey(t *testing.T) {
 	//TODO: Assert public key is data.Key type and the integrity of the publickey value
 }
 
-func TestHashiVaultClient_Sign(t *testing.T) {
+func TestHashiVaultClient_SignAndVerify(t *testing.T) {
 	hv, err := HVClient(transitSignPath)
 	if err != nil{
 		t.Errorf("Failed to create connection to vault client: %s", err)
 	}
 
-	plaintext := base64.StdEncoding.EncodeToString([]byte("hello"))
+	plaintext := base64.StdEncoding.EncodeToString([]byte(dataToSign))
 	params := map[string]interface{}{
 		"plaintext": plaintext,
 	}
 
-	ciphertext, err := hv.Sign(params, testkeyname1)
+	signature, err := hv.Sign(params, testkeyname1)
 	if err != nil {
-		t.Errorf("Failed to encrypt in transit secret engine %s", err)
+		t.Errorf("Failed to sign in transit secret engine %s", err)
 	}
 
-	fmt.Printf("Ciphertext is: %s", ciphertext)
+	hv2, err := HVClient(transitVerifyPath)
+	if err != nil{
+		t.Errorf("Failed to create connection to vault client: %s", err)
+	}
+
+	params = map[string]interface{}{
+		"input" : plaintext,
+		"signature": signature,
+	}
+
+	valid, err := hv2.Verify(params, testkeyname1)
+	if err != nil {
+		t.Errorf("Failed to verify in transit secret engine %s", err)
+	}
+	if !valid{
+		t.Errorf("Signature for plaintext %s failed.", testkeyname1)
+	}
 }
