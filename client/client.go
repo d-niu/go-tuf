@@ -151,7 +151,7 @@ func (c *Client) Init(rootKeys []*data.Key, threshold int) error {
 //
 // https://theupdateframework.github.io/specification/v1.0.19/index.html#load-trusted-root
 func (c *Client) Update() (data.TargetFiles, error) {
-	if err := c.updateRoots(); err != nil {
+	if err := c.UpdateRoots(); err != nil {
 		if _, ok := err.(verify.ErrExpired); ok {
 			// For backward compatibility, we wrap the ErrExpired inside
 			// ErrDecodeFailed.
@@ -216,7 +216,7 @@ func (c *Client) Update() (data.TargetFiles, error) {
 	return updatedTargets, nil
 }
 
-func (c *Client) updateRoots() error {
+func (c *Client) UpdateRoots() error {
 	// https://theupdateframework.github.io/specification/v1.0.19/index.html#load-trusted-root
 	// 5.2 Load the trusted root metadata file. We assume that a good,
 	// trusted copy of this file was shipped with the package manager
@@ -889,22 +889,22 @@ func (c *Client) Download(name string, dest Destination) (err error) {
 }
 
 // Target returns the target metadata for a specific target if it
-// exists. If it does not, ErrNotFound will be returned.
+// exists, searching from top-level level targets then through
+// all delegations. If it does not, ErrNotFound will be returned.
 func (c *Client) Target(name string) (data.TargetFileMeta, error) {
-	m, err := c.Targets()
-	if err != nil {
-		return data.TargetFileMeta{}, err
-	}
-
-	target, ok := m[util.NormalizeTarget(name)]
-	if ok {
+	target, err := c.getTargetFileMeta(util.NormalizeTarget(name))
+	if err == nil {
 		return target, nil
 	}
 
-	return data.TargetFileMeta{}, ErrNotFound{name}
+	if _, ok := err.(ErrUnknownTarget); ok {
+		return data.TargetFileMeta{}, ErrNotFound{name}
+	}
+
+	return data.TargetFileMeta{}, err
 }
 
-// Targets returns the complete list of available targets.
+// Targets returns the complete list of available top-level targets.
 func (c *Client) Targets() (data.TargetFiles, error) {
 	// populate c.targets from local storage if not set
 	if c.targets == nil {
