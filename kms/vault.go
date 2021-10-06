@@ -113,8 +113,8 @@ func (hv *hashiVaultClient) Sign(params map[string]interface{}, keyName string) 
 }
 
 func (hv *hashiVaultClient) Verify(params map[string]interface{}, keyName string) (bool, error) {
+	//fmt.Printf("Hash Sign is: %s", params["hash_algorithm"])
 	verifyPath := fmt.Sprintf("%s%s", hv.transitPath, keyName)
-	fmt.Printf("Passing?")
 	response, err := hv.client.Logical().Write(verifyPath, params)
 	if err != nil {
 		return false, errors.New("Failed to verify in transit secret engine: http call failed.")
@@ -125,4 +125,3 @@ func (hv *hashiVaultClient) Verify(params map[string]interface{}, keyName string
 	}
 	return valid, nil
 }
-
