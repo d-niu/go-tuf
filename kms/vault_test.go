@@ -53,8 +53,7 @@ func TestHashiVaultClient_SignAndVerify(t *testing.T) {
 		t.Errorf("Failed to create connection to vault client: %s", err)
 	}
 
-	plaintext := base64.StdE
-	ncoding.EncodeToString([]byte(dataToSign))
+	plaintext := base64.StdEncoding.EncodeToString([]byte(dataToSign))
 	params := map[string]interface{}{
 		"plaintext": plaintext,
 	}
