@@ -26,7 +26,7 @@ type fileSystemStore struct {
 	dir            string
 	passphraseFunc util.PassphraseFunc
 
-	// signers is a cache of persisted keys to avoid decrypting multiple times
+	// signers is a cache of persisted external to avoid decrypting multiple times
 	signers map[string][]keys.Signer
 }
 
@@ -72,7 +72,7 @@ func (f *fileSystemStore) SetMeta(name string, meta json.RawMessage) error {
 }
 
 func (f *fileSystemStore) createDirs() error {
-	for _, dir := range []string{"keys", "repository", "staged/targets"} {
+	for _, dir := range []string{"external", "repository", "staged/targets"} {
 		if err := os.MkdirAll(filepath.Join(f.dir, dir), 0755); err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func (f *fileSystemStore) SaveSigner(role string, signer keys.Signer) error {
 		return err
 	}
 
-	// add the key to the existing keys (if any)
+	// add the key to the existing external (if any)
 	keys, pass, err := f.loadPrivateKeys(role)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -249,9 +249,9 @@ func (f *fileSystemStore) SaveSigner(role string, signer keys.Signer) error {
 	}
 	keys = append(keys, key)
 
-	// if loadPrivateKeys didn't return a passphrase (because no keys yet exist)
-	// and passphraseFunc is set, get the passphrase so the keys file can
-	// be encrypted later (passphraseFunc being nil indicates the keys file
+	// if loadPrivateKeys didn't return a passphrase (because no external yet exist)
+	// and passphraseFunc is set, get the passphrase so the external file can
+	// be encrypted later (passphraseFunc being nil indicates the external file
 	// should not be encrypted)
 	if pass == nil && f.passphraseFunc != nil {
 		pass, err = f.passphraseFunc(role, true)
@@ -284,7 +284,7 @@ func (f *fileSystemStore) SaveSigner(role string, signer keys.Signer) error {
 	return nil
 }
 
-// loadPrivateKeys loads keys for the given role and returns them along with the
+// loadPrivateKeys loads external for the given role and returns them along with the
 // passphrase (if read) so that callers don't need to re-read it.
 func (f *fileSystemStore) loadPrivateKeys(role string) ([]*data.PrivateKey, []byte, error) {
 	file, err := os.Open(f.keysPath(role))
@@ -306,7 +306,7 @@ func (f *fileSystemStore) loadPrivateKeys(role string) ([]*data.PrivateKey, []by
 		return keys, nil, nil
 	}
 
-	// the keys are encrypted so cannot be loaded if passphraseFunc is not set
+	// the external are encrypted so cannot be loaded if passphraseFunc is not set
 	if f.passphraseFunc == nil {
 		return nil, nil, ErrPassphraseRequired{role}
 	}
@@ -326,7 +326,7 @@ func (f *fileSystemStore) loadPrivateKeys(role string) ([]*data.PrivateKey, []by
 }
 
 func (f *fileSystemStore) keysPath(role string) string {
-	return filepath.Join(f.dir, "keys", role+".json")
+	return filepath.Join(f.dir, "external", role+".json")
 }
 
 func (f *fileSystemStore) Clean() error {

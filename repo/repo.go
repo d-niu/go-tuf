@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/theupdateframework/go-tuf"
-	"github.com/theupdateframework/go-tuf/storage/repo"
 
 	"io"
 	"path"
@@ -26,7 +25,7 @@ var snapshotMetadata = []string{
 }
 
 type Repo struct {
-	local          repo.RepoStore
+	local          RepoStore
 	hashAlgorithms []string
 	meta           map[string]json.RawMessage
 	prefix         string
@@ -38,11 +37,11 @@ type Repo struct {
 	versionUpdated map[string]struct{}
 }
 
-func NewRepo(local repo.RepoStore, hashAlgorithms ...string) (*Repo, error) {
+func NewRepo(local RepoStore, hashAlgorithms ...string) (*Repo, error) {
 	return NewRepoIndent(local, "", "", hashAlgorithms...)
 }
 
-func NewRepoIndent(local repo.RepoStore, prefix string, indent string, hashAlgorithms ...string) (*Repo, error) {
+func NewRepoIndent(local RepoStore, prefix string, indent string, hashAlgorithms ...string) (*Repo, error) {
 	r := &Repo{
 		local:          local,
 		hashAlgorithms: hashAlgorithms,
@@ -365,7 +364,7 @@ func (r *Repo) RootKeys() ([]*data.PublicKey, error) {
 	}
 
 	// We might have multiple key ids that correspond to the same key, so
-	// make sure we only return unique keys.
+	// make sure we only return unique external.
 	seen := make(map[string]struct{})
 	rootKeys := []*data.PublicKey{}
 	for _, id := range role.KeyIDs {
@@ -562,12 +561,12 @@ func (r *Repo) AddOrUpdateSignature(roleFilename string, signature data.Signatur
 	return r.local.SetMeta(roleFilename, b)
 }
 
-// getSigningKeys returns available signing keys.
+// getSigningKeys returns available signing external.
 //
-// Only keys contained in the keys db are returned (i.e. local keys which have
+// Only external contained in the external db are returned (i.e. local external which have
 // been revoked are omitted), except for the root role in which case all local
-// keys are returned (revoked root keys still need to sign new root metadata so
-// clients can verify the new root.json and update their keys db accordingly).
+// external are returned (revoked root external still need to sign new root metadata so
+// clients can verify the new root.json and update their external db accordingly).
 func (r *Repo) getSigningKeys(name string) ([]keys.Signer, error) {
 	signingKeys, err := r.local.GetSigners(name)
 	if err != nil {
@@ -612,7 +611,7 @@ func (r *Repo) SignedMeta(roleFilename string) (*data.Signed, error) {
 }
 
 func validMetadata(roleFilename string) bool {
-	for _, m := range repo.TopLevelMetadata {
+	for _, m := range TopLevelMetadata {
 		if m == roleFilename {
 			return true
 		}
@@ -842,7 +841,7 @@ func (r *Repo) fileHashes() (map[string]data.Hashes, error) {
 
 func (r *Repo) Commit() error {
 	// check we have all the metadata
-	for _, name := range repo.TopLevelMetadata {
+	for _, name := range TopLevelMetadata {
 		if _, ok := r.meta[name]; !ok {
 			return tuf.ErrMissingMetadata{name}
 		}
@@ -896,7 +895,7 @@ func (r *Repo) Commit() error {
 	if err != nil {
 		return err
 	}
-	for _, name := range repo.TopLevelMetadata {
+	for _, name := range TopLevelMetadata {
 		if err := r.verifySignature(name, db); err != nil {
 			return err
 		}

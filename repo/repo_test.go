@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/theupdateframework/go-tuf"
-	"github.com/theupdateframework/go-tuf/storage/repo"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -36,12 +35,12 @@ func (RepoSuite) TestNewRepo(c *C) {
 }
 
 func (RepoSuite) TestNewRepoIndent(c *C) {
-	testNewRepo(c, func(local repo.RepoStore, hashAlgorithms ...string) (*Repo, error) {
+	testNewRepo(c, func(local RepoStore, hashAlgorithms ...string) (*Repo, error) {
 		return NewRepoIndent(local, "", "\t")
 	})
 }
 
-// UniqueKeys returns the unique keys for each associated role.
+// UniqueKeys returns the unique external for each associated role.
 // We might have multiple key IDs that correspond to the same key.
 func UniqueKeys(r *data.Root) map[string][]*data.PublicKey {
 	keysByRole := make(map[string][]*data.PublicKey)
@@ -68,19 +67,19 @@ func UniqueKeys(r *data.Root) map[string][]*data.PublicKey {
 	return keysByRole
 }
 
-// AssertNumUniqueKeys verifies that the number of unique root keys for a given role is as expected.
+// AssertNumUniqueKeys verifies that the number of unique root external for a given role is as expected.
 func (*RepoSuite) assertNumUniqueKeys(c *C, root *data.Root, role string, num int) {
 	c.Assert(UniqueKeys(root)[role], HasLen, num)
 }
 
-func testNewRepo(c *C, newRepo func(local repo.RepoStore, hashAlgorithms ...string) (*Repo, error)) {
+func testNewRepo(c *C, newRepo func(local RepoStore, hashAlgorithms ...string) (*Repo, error)) {
 	meta := map[string]json.RawMessage{
 		"root.json": []byte(`{
 		  "signed": {
 		    "_type": "root",
 		    "version": 1,
 		    "expires": "2015-12-26T03:26:55.821520874Z",
-		    "keys": {},
+		    "external": {},
 		    "roles": {}
 		  },
 		  "signatures": []
@@ -113,7 +112,7 @@ func testNewRepo(c *C, newRepo func(local repo.RepoStore, hashAlgorithms ...stri
 		  "signatures": []
 		}`),
 	}
-	local := repo.MemoryStore(meta, nil)
+	local := MemoryStore(meta, nil)
 	r, err := newRepo(local)
 	c.Assert(err, IsNil)
 
@@ -147,7 +146,7 @@ func testNewRepo(c *C, newRepo func(local repo.RepoStore, hashAlgorithms ...stri
 }
 
 func (rs *RepoSuite) TestInit(c *C) {
-	local := repo.MemoryStore(
+	local := MemoryStore(
 		make(map[string]json.RawMessage),
 		map[string][]byte{"foo.txt": []byte("foo")},
 	)
@@ -175,7 +174,7 @@ func genKey(c *C, r *Repo, role string) []string {
 }
 
 func (rs *RepoSuite) TestGenKey(c *C) {
-	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
+	local := MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -238,7 +237,7 @@ func (rs *RepoSuite) TestGenKey(c *C) {
 	rootKey, err := db.GetVerifier(ids[0])
 	c.Assert(err, IsNil)
 
-	// generate two targets keys
+	// generate two targets external
 	genKey(c, r, "targets")
 	genKey(c, r, "targets")
 
@@ -275,7 +274,7 @@ func (rs *RepoSuite) TestGenKey(c *C) {
 	c.Assert(rootKeys, HasLen, 1)
 	c.Assert(rootKeys[0].IDs(), DeepEquals, rootKey.MarshalPublicKey().IDs())
 
-	// check the keys were saved correctly
+	// check the external were saved correctly
 	localKeys, err := local.GetSigners("targets")
 	c.Assert(err, IsNil)
 	c.Assert(localKeys, HasLen, 2)
@@ -335,7 +334,7 @@ func generateAndAddPrivateKey(c *C, r *Repo, role string) []string {
 }
 
 func (rs *RepoSuite) TestAddPrivateKey(c *C) {
-	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
+	local := MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -401,7 +400,7 @@ func (rs *RepoSuite) TestAddPrivateKey(c *C) {
 	rootKey, err := db.GetVerifier(ids[0])
 	c.Assert(err, IsNil)
 
-	// generate two targets keys
+	// generate two targets external
 	generateAndAddPrivateKey(c, r, "targets")
 	generateAndAddPrivateKey(c, r, "targets")
 
@@ -438,7 +437,7 @@ func (rs *RepoSuite) TestAddPrivateKey(c *C) {
 	c.Assert(rootKeys, HasLen, 1)
 	c.Assert(rootKeys[0].IDs(), DeepEquals, rootKey.MarshalPublicKey().IDs())
 
-	// check the keys were saved correctly
+	// check the external were saved correctly
 	localKeys, err := local.GetSigners("targets")
 	c.Assert(err, IsNil)
 	c.Assert(localKeys, HasLen, 2)
@@ -503,7 +502,7 @@ func (rs *RepoSuite) TestAddPrivateKey(c *C) {
 }
 
 func (rs *RepoSuite) TestRevokeKey(c *C) {
-	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
+	local := MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -513,7 +512,7 @@ func (rs *RepoSuite) TestRevokeKey(c *C) {
 	// revoking a key which doesn't exist returns ErrKeyNotFound
 	c.Assert(r.RevokeKey("root", "nonexistent"), DeepEquals, tuf.ErrKeyNotFound{"root", "nonexistent"})
 
-	// generate keys
+	// generate external
 	genKey(c, r, "root")
 	target1IDs := genKey(c, r, "targets")
 	target2IDs := genKey(c, r, "targets")
@@ -563,11 +562,11 @@ func (rs *RepoSuite) TestRevokeKey(c *C) {
 
 func (rs *RepoSuite) TestSign(c *C) {
 	meta := map[string]json.RawMessage{"root.json": []byte(`{"signed":{},"signatures":[]}`)}
-	local := repo.MemoryStore(meta, nil)
+	local := MemoryStore(meta, nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
-	// signing with no keys returns ErrInsufficientKeys
+	// signing with no external returns ErrInsufficientKeys
 	c.Assert(r.Sign("root.json"), Equals, tuf.ErrInsufficientKeys{"root.json"})
 
 	checkSigIDs := func(keyIDs ...string) {
@@ -606,7 +605,7 @@ func (rs *RepoSuite) TestSign(c *C) {
 
 func (rs *RepoSuite) TestCommit(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo"), "bar.txt": []byte("bar")}
-	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
+	local := MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -653,7 +652,7 @@ func (rs *RepoSuite) TestCommit(c *C) {
 	c.Assert(err, NotNil)
 	c.Assert(err.Error()[0:44], Equals, "tuf: invalid snapshot.json in timestamp.json")
 
-	// commit with a role's threshold greater than number of keys
+	// commit with a role's threshold greater than number of external
 	root, err := r.root()
 	c.Assert(err, IsNil)
 	role, ok := root.Roles["timestamp"]
@@ -670,7 +669,7 @@ func (rs *RepoSuite) TestCommit(c *C) {
 
 func (rs *RepoSuite) TestCommitVersions(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
+	local := MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -722,7 +721,7 @@ func (rs *RepoSuite) TestCommitVersions(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(timestampVersion, Equals, 2)
 
-	// rotating multiple keys should increment the root once.
+	// rotating multiple external should increment the root once.
 	genKey(c, r, "targets")
 	genKey(c, r, "snapshot")
 	genKey(c, r, "timestamp")
@@ -830,7 +829,7 @@ func (t *tmpDir) readFile(path string) []byte {
 
 func (rs *RepoSuite) TestCommitFileSystem(c *C) {
 	tmp := newTmpDir(c)
-	local := repo.FileSystemStore(tmp.path, nil)
+	local := FileSystemStore(tmp.path, nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -838,9 +837,9 @@ func (rs *RepoSuite) TestCommitFileSystem(c *C) {
 	c.Assert(r.Init(false), IsNil)
 
 	// cleaning with nothing staged or committed should fail
-	c.Assert(r.Clean(), Equals, repo.ErrNewRepository)
+	c.Assert(r.Clean(), Equals, ErrNewRepository)
 
-	// generating keys should stage root.json and create storage dirs
+	// generating external should stage root.json and create storage dirs
 	genKey(c, r, "root")
 	genKey(c, r, "targets")
 	genKey(c, r, "snapshot")
@@ -850,10 +849,10 @@ func (rs *RepoSuite) TestCommitFileSystem(c *C) {
 	tmp.assertEmpty("staged/targets")
 
 	// cleaning with nothing committed should fail
-	c.Assert(r.Clean(), Equals, repo.ErrNewRepository)
+	c.Assert(r.Clean(), Equals, ErrNewRepository)
 
 	// adding a non-existent file fails
-	c.Assert(r.AddTarget("foo.txt", nil), Equals, repo.ErrFileNotFound{tmp.stagedTargetPath("foo.txt")})
+	c.Assert(r.AddTarget("foo.txt", nil), Equals, ErrFileNotFound{tmp.stagedTargetPath("foo.txt")})
 	tmp.assertEmpty("repository")
 
 	// adding a file stages targets.json
@@ -916,7 +915,7 @@ func (rs *RepoSuite) TestCommitFileSystemWithNewRepositories(c *C) {
 	tmp := newTmpDir(c)
 
 	newRepo := func() *Repo {
-		local := repo.FileSystemStore(tmp.path, nil)
+		local := FileSystemStore(tmp.path, nil)
 		r, err := NewRepo(local)
 		c.Assert(err, IsNil)
 		return r
@@ -936,7 +935,7 @@ func (rs *RepoSuite) TestCommitFileSystemWithNewRepositories(c *C) {
 
 func (rs *RepoSuite) TestConsistentSnapshot(c *C) {
 	tmp := newTmpDir(c)
-	local := repo.FileSystemStore(tmp.path, nil)
+	local := FileSystemStore(tmp.path, nil)
 	r, err := NewRepo(local, "sha512", "sha256")
 	c.Assert(err, IsNil)
 
@@ -1022,7 +1021,7 @@ func (rs *RepoSuite) TestConsistentSnapshot(c *C) {
 
 func (rs *RepoSuite) TestExpiresAndVersion(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
+	local := MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1137,7 +1136,7 @@ func (rs *RepoSuite) TestExpiresAndVersion(c *C) {
 
 func (rs *RepoSuite) TestHashAlgorithm(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
+	local := MemoryStore(make(map[string]json.RawMessage), files)
 	type hashTest struct {
 		args     []string
 		expected []string
@@ -1189,14 +1188,14 @@ func testPassphraseFunc(p []byte) util.PassphraseFunc {
 func (rs *RepoSuite) TestKeyPersistence(c *C) {
 	tmp := newTmpDir(c)
 	passphrase := []byte("s3cr3t")
-	store := repo.FileSystemStore(tmp.path, testPassphraseFunc(passphrase))
+	store := FileSystemStore(tmp.path, testPassphraseFunc(passphrase))
 
 	assertKeys := func(role string, enc bool, expected []*data.PrivateKey) {
-		keysJSON := tmp.readFile("keys/" + role + ".json")
-		pk := &repo.PersistedKeys{}
+		keysJSON := tmp.readFile("external/" + role + ".json")
+		pk := &PersistedKeys{}
 		c.Assert(json.Unmarshal(keysJSON, pk), IsNil)
 
-		// check the persisted keys are correct
+		// check the persisted external are correct
 		var actual []*data.PrivateKey
 		if enc {
 			c.Assert(pk.Encrypted, Equals, true)
@@ -1231,7 +1230,7 @@ func (rs *RepoSuite) TestKeyPersistence(c *C) {
 	c.Assert(store.SaveSigner("root", signer), IsNil)
 	assertKeys("root", true, []*data.PrivateKey{privateKey})
 
-	// save another key and check it gets added to the existing keys
+	// save another key and check it gets added to the existing external
 	newKey, err := keys.GenerateEd25519Key()
 	c.Assert(err, IsNil)
 	newPrivateKey, err := newKey.MarshalPrivateKey()
@@ -1240,10 +1239,10 @@ func (rs *RepoSuite) TestKeyPersistence(c *C) {
 	assertKeys("root", true, []*data.PrivateKey{privateKey, newPrivateKey})
 
 	// check saving a key to an encrypted file without a passphrase fails
-	insecureStore := repo.FileSystemStore(tmp.path, nil)
+	insecureStore := FileSystemStore(tmp.path, nil)
 	signer, err = keys.GenerateEd25519Key()
 	c.Assert(err, IsNil)
-	c.Assert(insecureStore.SaveSigner("root", signer), Equals, repo.ErrPassphraseRequired{"root"})
+	c.Assert(insecureStore.SaveSigner("root", signer), Equals, ErrPassphraseRequired{"root"})
 
 	// save a key to an insecure store and check it is not encrypted
 	signer, err = keys.GenerateEd25519Key()
@@ -1256,7 +1255,7 @@ func (rs *RepoSuite) TestKeyPersistence(c *C) {
 
 func (rs *RepoSuite) TestManageMultipleTargets(c *C) {
 	tmp := newTmpDir(c)
-	local := repo.FileSystemStore(tmp.path, nil)
+	local := FileSystemStore(tmp.path, nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 	// don't use consistent snapshots to make the checks simpler
@@ -1324,7 +1323,7 @@ func (rs *RepoSuite) TestCustomTargetMetadata(c *C) {
 		"bar.txt": []byte("bar"),
 		"baz.txt": []byte("baz"),
 	}
-	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
+	local := MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1357,7 +1356,7 @@ func (rs *RepoSuite) TestCustomTargetMetadata(c *C) {
 
 func (rs *RepoSuite) TestUnknownKeyIDs(c *C) {
 	// generate a storage
-	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
+	local := MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1425,7 +1424,7 @@ func (rs *RepoSuite) TestUnknownKeyIDs(c *C) {
 }
 
 func (rs *RepoSuite) TestThreshold(c *C) {
-	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
+	local := MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1444,7 +1443,7 @@ func (rs *RepoSuite) TestThreshold(c *C) {
 	c.Assert(r.Timestamp(), IsNil)
 	c.Assert(r.Commit(), IsNil)
 
-	// Set a new threshold. Commit without threshold keys
+	// Set a new threshold. Commit without threshold external
 	c.Assert(r.SetThreshold("root", 2), IsNil)
 	t, err = r.GetThreshold("root")
 	c.Assert(err, IsNil)
@@ -1478,7 +1477,7 @@ func (rs *RepoSuite) TestThreshold(c *C) {
 
 func (rs *RepoSuite) TestAddOrUpdateSignatures(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
+	local := MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1551,7 +1550,7 @@ func (rs *RepoSuite) TestAddOrUpdateSignatures(c *C) {
 
 func (rs *RepoSuite) TestBadAddOrUpdateSignatures(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
+	local := MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1610,11 +1609,11 @@ func (rs *RepoSuite) TestBadAddOrUpdateSignatures(c *C) {
 		c.Assert(err, IsNil)
 		db, err := r.db()
 		c.Assert(err, IsNil)
-		// keys is a map of key IDs.
+		// external is a map of key IDs.
 		keys := db.GetRole(strings.TrimSuffix(role, ".json")).KeyIDs
 		c.Assert(s.Signatures, HasLen, len(keys))
 		// If the lengths are equal, and each signature key ID appears
-		// in the role keys, they Sig IDs are equal to keyIDs.
+		// in the role external, they Sig IDs are equal to keyIDs.
 		for _, sig := range s.Signatures {
 			if _, ok := keys[sig.KeyID]; !ok {
 				c.Fatal("missing key ID in signatures")

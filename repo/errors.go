@@ -22,5 +22,5 @@ type ErrPassphraseRequired struct {
 }
 
 func (e ErrPassphraseRequired) Error() string {
-	return fmt.Sprintf("tuf: a passphrase is required to access the encrypted %s keys file", e.Role)
+	return fmt.Sprintf("tuf: a passphrase is required to access the encrypted %s external file", e.Role)
 }
