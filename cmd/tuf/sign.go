@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/flynn/go-docopt"
-	"github.com/theupdateframework/go-tuf"
+	"github.com/theupdateframework/go-tuf/repo"
 )
 
 func init() {
@@ -16,6 +16,6 @@ directory for that role.
 `)
 }
 
-func cmdSign(args *docopt.Args, repo *tuf.Repo) error {
+func cmdSign(args *docopt.Args, repo *repo.Repo) error {
 	return repo.Sign(args.String["<metadata>"])
 }

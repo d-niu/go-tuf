@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/theupdateframework/go-tuf/repo"
 	"io"
 	"io/ioutil"
 	"net"
@@ -29,9 +30,9 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type ClientSuite struct {
-	store       tuf.LocalStore
-	repo        *tuf.Repo
-	local       LocalStore
+	store tuf.LocalStore
+	repo  *repo.Repo
+	local LocalStore
 	remote      *fakeRemoteStore
 	expiredTime time.Time
 	keyIDs      map[string][]string
@@ -97,9 +98,9 @@ var targetFiles = map[string][]byte{
 func (s *ClientSuite) SetUpTest(c *C) {
 	s.store = tuf.MemoryStore(nil, targetFiles)
 
-	// create a valid repo containing foo.txt
+	// create a valid storage containing foo.txt
 	var err error
-	s.repo, err = tuf.NewRepo(s.store)
+	s.repo, err = repo.NewRepo(s.store)
 	c.Assert(err, IsNil)
 	// don't use consistent snapshots to make testing easier (consistent
 	// snapshots are tested explicitly elsewhere)
@@ -115,7 +116,7 @@ func (s *ClientSuite) SetUpTest(c *C) {
 	c.Assert(s.repo.Timestamp(), IsNil)
 	c.Assert(s.repo.Commit(), IsNil)
 
-	// create a remote store containing valid repo files
+	// create a remote store containing valid storage files
 	s.remote = newFakeRemoteStore()
 	s.syncRemote(c)
 	for path, data := range targetFiles {
@@ -1136,7 +1137,7 @@ func (s *ClientSuite) TestUnknownKeyIDs(c *C) {
 	// FIXME(TUF-0.9) We need this for now because the client still uses
 	// the TUF-0.9 update workflow, where we decide to update the root
 	// metadata when we observe a new root through the snapshot.
-	repo, err := tuf.NewRepo(s.store)
+	repo, err := repo.NewRepo(s.store)
 	c.Assert(repo.Snapshot(), IsNil)
 	c.Assert(repo.Timestamp(), IsNil)
 	c.Assert(repo.Commit(), IsNil)
@@ -1148,8 +1149,8 @@ func (s *ClientSuite) TestUnknownKeyIDs(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func generateRepoFS(c *C, dir string, files map[string][]byte, consistentSnapshot bool) *tuf.Repo {
-	repo, err := tuf.NewRepo(tuf.FileSystemStore(dir, nil))
+func generateRepoFS(c *C, dir string, files map[string][]byte, consistentSnapshot bool) *repo.Repo {
+	repo, err := repo.NewRepo(tuf.FileSystemStore(dir, nil))
 	c.Assert(err, IsNil)
 	if !consistentSnapshot {
 		c.Assert(repo.Init(false), IsNil)

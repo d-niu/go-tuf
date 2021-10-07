@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/flynn/go-docopt"
-	"github.com/theupdateframework/go-tuf"
+	"github.com/theupdateframework/go-tuf/repo"
 )
 
 func init() {
@@ -19,7 +19,7 @@ Options:
 `)
 }
 
-func cmdSnapshot(args *docopt.Args, repo *tuf.Repo) error {
+func cmdSnapshot(args *docopt.Args, repo *repo.Repo) error {
 	if arg := args.String["--expires"]; arg != "" {
 		expires, err := parseExpires(arg)
 		if err != nil {

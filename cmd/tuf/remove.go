@@ -2,9 +2,8 @@ package main
 
 import (
 	"errors"
-
 	"github.com/flynn/go-docopt"
-	"github.com/theupdateframework/go-tuf"
+	"github.com/theupdateframework/go-tuf/repo"
 )
 
 func init() {
@@ -22,7 +21,7 @@ Options:
 `)
 }
 
-func cmdRemove(args *docopt.Args, repo *tuf.Repo) error {
+func cmdRemove(args *docopt.Args, repo *repo.Repo) error {
 	paths := args.All["<path>"].([]string)
 	if len(paths) == 0 && !args.Bool["--all"] {
 		return errors.New("either specify some paths or set the --all flag to remove all targets")

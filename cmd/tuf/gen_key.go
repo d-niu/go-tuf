@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/theupdateframework/go-tuf/repo"
 	"time"
 
 	"github.com/flynn/go-docopt"
-	"github.com/theupdateframework/go-tuf"
 )
 
 func init() {
@@ -26,7 +26,7 @@ Options:
 `)
 }
 
-func cmdGenKey(args *docopt.Args, repo *tuf.Repo) error {
+func cmdGenKey(args *docopt.Args, repo *repo.Repo) error {
 	role := args.String["<role>"]
 	var keyids []string
 	var err error

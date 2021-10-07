@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/theupdateframework/go-tuf/repo"
 	"os"
 
 	"github.com/flynn/go-docopt"
@@ -16,7 +17,7 @@ Remove all staged metadata files.
 `)
 }
 
-func cmdClean(args *docopt.Args, repo *tuf.Repo) error {
+func cmdClean(args *docopt.Args, repo *repo.Repo) error {
 	err := repo.Clean()
 	if err == tuf.ErrNewRepository {
 		fmt.Fprintln(os.Stderr, "tuf: refusing to clean new repository")

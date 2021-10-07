@@ -19,14 +19,6 @@ func (e ErrMissingMetadata) Error() string {
 	return fmt.Sprintf("tuf: missing metadata %s", e.Name)
 }
 
-type ErrFileNotFound struct {
-	Path string
-}
-
-func (e ErrFileNotFound) Error() string {
-	return fmt.Sprintf("tuf: file not found %s", e.Path)
-}
-
 type ErrInsufficientKeys struct {
 	Name string
 }
@@ -77,12 +69,4 @@ type ErrNotEnoughKeys struct {
 
 func (e ErrNotEnoughKeys) Error() string {
 	return fmt.Sprintf("tuf: %s role has insufficient keys for threshold (has %d keys, threshold is %d)", e.Role, e.Keys, e.Threshold)
-}
-
-type ErrPassphraseRequired struct {
-	Role string
-}
-
-func (e ErrPassphraseRequired) Error() string {
-	return fmt.Sprintf("tuf: a passphrase is required to access the encrypted %s keys file", e.Role)
 }

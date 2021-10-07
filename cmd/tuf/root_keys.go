@@ -2,10 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/theupdateframework/go-tuf/repo"
 	"os"
 
 	"github.com/flynn/go-docopt"
-	"github.com/theupdateframework/go-tuf"
 )
 
 func init() {
@@ -18,7 +18,7 @@ The resulting JSON should be distributed to clients for performing initial updat
 `)
 }
 
-func cmdRootKeys(args *docopt.Args, repo *tuf.Repo) error {
+func cmdRootKeys(args *docopt.Args, repo *repo.Repo) error {
 	keys, err := repo.RootKeys()
 	if err != nil {
 		return err

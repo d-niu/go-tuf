@@ -2,9 +2,8 @@ package main
 
 import (
 	"encoding/json"
-
 	"github.com/flynn/go-docopt"
-	"github.com/theupdateframework/go-tuf"
+	"github.com/theupdateframework/go-tuf/repo"
 )
 
 func init() {
@@ -22,7 +21,7 @@ Options:
 `)
 }
 
-func cmdAdd(args *docopt.Args, repo *tuf.Repo) error {
+func cmdAdd(args *docopt.Args, repo *repo.Repo) error {
 	var custom json.RawMessage
 	if c := args.String["--custom"]; c != "" {
 		custom = json.RawMessage(c)

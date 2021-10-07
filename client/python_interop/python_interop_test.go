@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/theupdateframework/go-tuf/repo"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -95,8 +96,8 @@ func (InteropSuite) TestGoClientPythonGenerated(c *C) {
 	}
 }
 
-func generateRepoFS(c *C, dir string, files map[string][]byte, consistentSnapshot bool) *tuf.Repo {
-	repo, err := tuf.NewRepo(tuf.FileSystemStore(dir, nil))
+func generateRepoFS(c *C, dir string, files map[string][]byte, consistentSnapshot bool) *repo.Repo {
+	repo, err := repo.NewRepo(tuf.FileSystemStore(dir, nil))
 	c.Assert(err, IsNil)
 	if !consistentSnapshot {
 		c.Assert(repo.Init(false), IsNil)
@@ -150,7 +151,7 @@ func (InteropSuite) TestPythonClientGoGenerated(c *C) {
 
 		args := []string{
 			filepath.Join(cwd, "testdata", "python-tuf-v0.11.1", "client.py"),
-			"--repo=http://" + addr + "/" + name,
+			"--storage=http://" + addr + "/" + name,
 			"--verbose=5",
 		}
 		for path := range files {

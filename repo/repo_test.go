@@ -1,4 +1,4 @@
-package tuf
+package repo
 
 import (
 	"crypto"
@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/theupdateframework/go-tuf"
+	"github.com/theupdateframework/go-tuf/storage/repo"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -34,7 +36,7 @@ func (RepoSuite) TestNewRepo(c *C) {
 }
 
 func (RepoSuite) TestNewRepoIndent(c *C) {
-	testNewRepo(c, func(local LocalStore, hashAlgorithms ...string) (*Repo, error) {
+	testNewRepo(c, func(local repo.RepoStore, hashAlgorithms ...string) (*Repo, error) {
 		return NewRepoIndent(local, "", "\t")
 	})
 }
@@ -71,7 +73,7 @@ func (*RepoSuite) assertNumUniqueKeys(c *C, root *data.Root, role string, num in
 	c.Assert(UniqueKeys(root)[role], HasLen, num)
 }
 
-func testNewRepo(c *C, newRepo func(local LocalStore, hashAlgorithms ...string) (*Repo, error)) {
+func testNewRepo(c *C, newRepo func(local repo.RepoStore, hashAlgorithms ...string) (*Repo, error)) {
 	meta := map[string]json.RawMessage{
 		"root.json": []byte(`{
 		  "signed": {
@@ -111,7 +113,7 @@ func testNewRepo(c *C, newRepo func(local LocalStore, hashAlgorithms ...string) 
 		  "signatures": []
 		}`),
 	}
-	local := MemoryStore(meta, nil)
+	local := repo.MemoryStore(meta, nil)
 	r, err := newRepo(local)
 	c.Assert(err, IsNil)
 
@@ -145,7 +147,7 @@ func testNewRepo(c *C, newRepo func(local LocalStore, hashAlgorithms ...string) 
 }
 
 func (rs *RepoSuite) TestInit(c *C) {
-	local := MemoryStore(
+	local := repo.MemoryStore(
 		make(map[string]json.RawMessage),
 		map[string][]byte{"foo.txt": []byte("foo")},
 	)
@@ -162,7 +164,7 @@ func (rs *RepoSuite) TestInit(c *C) {
 
 	// Init() fails if targets have been added
 	c.Assert(r.AddTarget("foo.txt", nil), IsNil)
-	c.Assert(r.Init(true), Equals, ErrInitNotAllowed)
+	c.Assert(r.Init(true), Equals, tuf.ErrInitNotAllowed)
 }
 
 func genKey(c *C, r *Repo, role string) []string {
@@ -173,13 +175,13 @@ func genKey(c *C, r *Repo, role string) []string {
 }
 
 func (rs *RepoSuite) TestGenKey(c *C) {
-	local := MemoryStore(make(map[string]json.RawMessage), nil)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
 	// generate a key for an unknown role
 	_, err = r.GenKey("foo")
-	c.Assert(err, Equals, ErrInvalidRole{"foo"})
+	c.Assert(err, Equals, tuf.ErrInvalidRole{"foo"})
 
 	// generate a root key
 	ids := genKey(c, r, "root")
@@ -333,7 +335,7 @@ func generateAndAddPrivateKey(c *C, r *Repo, role string) []string {
 }
 
 func (rs *RepoSuite) TestAddPrivateKey(c *C) {
-	local := MemoryStore(make(map[string]json.RawMessage), nil)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -341,7 +343,7 @@ func (rs *RepoSuite) TestAddPrivateKey(c *C) {
 	signer, err := keys.GenerateEd25519Key()
 	c.Assert(err, IsNil)
 	err = r.AddPrivateKey("foo", signer)
-	c.Assert(err, Equals, ErrInvalidRole{"foo"})
+	c.Assert(err, Equals, tuf.ErrInvalidRole{"foo"})
 
 	// add a root key
 	ids := addPrivateKey(c, r, "root", signer)
@@ -501,15 +503,15 @@ func (rs *RepoSuite) TestAddPrivateKey(c *C) {
 }
 
 func (rs *RepoSuite) TestRevokeKey(c *C) {
-	local := MemoryStore(make(map[string]json.RawMessage), nil)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
 	// revoking a key for an unknown role returns ErrInvalidRole
-	c.Assert(r.RevokeKey("foo", ""), DeepEquals, ErrInvalidRole{"foo"})
+	c.Assert(r.RevokeKey("foo", ""), DeepEquals, tuf.ErrInvalidRole{"foo"})
 
 	// revoking a key which doesn't exist returns ErrKeyNotFound
-	c.Assert(r.RevokeKey("root", "nonexistent"), DeepEquals, ErrKeyNotFound{"root", "nonexistent"})
+	c.Assert(r.RevokeKey("root", "nonexistent"), DeepEquals, tuf.ErrKeyNotFound{"root", "nonexistent"})
 
 	// generate keys
 	genKey(c, r, "root")
@@ -538,7 +540,7 @@ func (rs *RepoSuite) TestRevokeKey(c *C) {
 
 	// make sure all the other key ids were also revoked
 	for _, id := range target1IDs {
-		c.Assert(r.RevokeKey("targets", id), DeepEquals, ErrKeyNotFound{"targets", id})
+		c.Assert(r.RevokeKey("targets", id), DeepEquals, tuf.ErrKeyNotFound{"targets", id})
 	}
 
 	// check root was updated
@@ -561,12 +563,12 @@ func (rs *RepoSuite) TestRevokeKey(c *C) {
 
 func (rs *RepoSuite) TestSign(c *C) {
 	meta := map[string]json.RawMessage{"root.json": []byte(`{"signed":{},"signatures":[]}`)}
-	local := MemoryStore(meta, nil)
+	local := repo.MemoryStore(meta, nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
 	// signing with no keys returns ErrInsufficientKeys
-	c.Assert(r.Sign("root.json"), Equals, ErrInsufficientKeys{"root.json"})
+	c.Assert(r.Sign("root.json"), Equals, tuf.ErrInsufficientKeys{"root.json"})
 
 	checkSigIDs := func(keyIDs ...string) {
 		meta, err := local.GetMeta()
@@ -604,30 +606,30 @@ func (rs *RepoSuite) TestSign(c *C) {
 
 func (rs *RepoSuite) TestCommit(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo"), "bar.txt": []byte("bar")}
-	local := MemoryStore(make(map[string]json.RawMessage), files)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
 	// commit without root.json
-	c.Assert(r.Commit(), DeepEquals, ErrMissingMetadata{"root.json"})
+	c.Assert(r.Commit(), DeepEquals, tuf.ErrMissingMetadata{"root.json"})
 
 	// commit without targets.json
 	genKey(c, r, "root")
-	c.Assert(r.Commit(), DeepEquals, ErrMissingMetadata{"targets.json"})
+	c.Assert(r.Commit(), DeepEquals, tuf.ErrMissingMetadata{"targets.json"})
 
 	// commit without snapshot.json
 	genKey(c, r, "targets")
 	c.Assert(r.AddTarget("foo.txt", nil), IsNil)
-	c.Assert(r.Commit(), DeepEquals, ErrMissingMetadata{"snapshot.json"})
+	c.Assert(r.Commit(), DeepEquals, tuf.ErrMissingMetadata{"snapshot.json"})
 
 	// commit without timestamp.json
 	genKey(c, r, "snapshot")
 	c.Assert(r.Snapshot(), IsNil)
-	c.Assert(r.Commit(), DeepEquals, ErrMissingMetadata{"timestamp.json"})
+	c.Assert(r.Commit(), DeepEquals, tuf.ErrMissingMetadata{"timestamp.json"})
 
 	// commit with timestamp.json but no timestamp key
 	c.Assert(r.Timestamp(), IsNil)
-	c.Assert(r.Commit(), DeepEquals, ErrInsufficientSignatures{"timestamp.json", verify.ErrNoSignatures})
+	c.Assert(r.Commit(), DeepEquals, tuf.ErrInsufficientSignatures{"timestamp.json", verify.ErrNoSignatures})
 
 	// commit success
 	genKey(c, r, "timestamp")
@@ -663,12 +665,12 @@ func (rs *RepoSuite) TestCommit(c *C) {
 	c.Assert(r.RevokeKey("timestamp", role.KeyIDs[0]), IsNil)
 	c.Assert(r.Snapshot(), IsNil)
 	c.Assert(r.Timestamp(), IsNil)
-	c.Assert(r.Commit(), DeepEquals, ErrNotEnoughKeys{"timestamp", 0, 1})
+	c.Assert(r.Commit(), DeepEquals, tuf.ErrNotEnoughKeys{"timestamp", 0, 1})
 }
 
 func (rs *RepoSuite) TestCommitVersions(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := MemoryStore(make(map[string]json.RawMessage), files)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -828,7 +830,7 @@ func (t *tmpDir) readFile(path string) []byte {
 
 func (rs *RepoSuite) TestCommitFileSystem(c *C) {
 	tmp := newTmpDir(c)
-	local := FileSystemStore(tmp.path, nil)
+	local := repo.FileSystemStore(tmp.path, nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -836,9 +838,9 @@ func (rs *RepoSuite) TestCommitFileSystem(c *C) {
 	c.Assert(r.Init(false), IsNil)
 
 	// cleaning with nothing staged or committed should fail
-	c.Assert(r.Clean(), Equals, ErrNewRepository)
+	c.Assert(r.Clean(), Equals, repo.ErrNewRepository)
 
-	// generating keys should stage root.json and create repo dirs
+	// generating keys should stage root.json and create storage dirs
 	genKey(c, r, "root")
 	genKey(c, r, "targets")
 	genKey(c, r, "snapshot")
@@ -848,10 +850,10 @@ func (rs *RepoSuite) TestCommitFileSystem(c *C) {
 	tmp.assertEmpty("staged/targets")
 
 	// cleaning with nothing committed should fail
-	c.Assert(r.Clean(), Equals, ErrNewRepository)
+	c.Assert(r.Clean(), Equals, repo.ErrNewRepository)
 
 	// adding a non-existent file fails
-	c.Assert(r.AddTarget("foo.txt", nil), Equals, ErrFileNotFound{tmp.stagedTargetPath("foo.txt")})
+	c.Assert(r.AddTarget("foo.txt", nil), Equals, repo.ErrFileNotFound{tmp.stagedTargetPath("foo.txt")})
 	tmp.assertEmpty("repository")
 
 	// adding a file stages targets.json
@@ -914,7 +916,7 @@ func (rs *RepoSuite) TestCommitFileSystemWithNewRepositories(c *C) {
 	tmp := newTmpDir(c)
 
 	newRepo := func() *Repo {
-		local := FileSystemStore(tmp.path, nil)
+		local := repo.FileSystemStore(tmp.path, nil)
 		r, err := NewRepo(local)
 		c.Assert(err, IsNil)
 		return r
@@ -934,7 +936,7 @@ func (rs *RepoSuite) TestCommitFileSystemWithNewRepositories(c *C) {
 
 func (rs *RepoSuite) TestConsistentSnapshot(c *C) {
 	tmp := newTmpDir(c)
-	local := FileSystemStore(tmp.path, nil)
+	local := repo.FileSystemStore(tmp.path, nil)
 	r, err := NewRepo(local, "sha512", "sha256")
 	c.Assert(err, IsNil)
 
@@ -1007,7 +1009,7 @@ func (rs *RepoSuite) TestConsistentSnapshot(c *C) {
 	tmp.assertHashedFilesNotExist("repository/targets/foo.txt", fooHashes)
 	tmp.assertNotExist("repository/targets/foo.txt")
 
-	// targets should be returned by new repo
+	// targets should be returned by new storage
 	newRepo, err := NewRepo(local, "sha512", "sha256")
 	c.Assert(err, IsNil)
 	t, err := newRepo.targets()
@@ -1020,7 +1022,7 @@ func (rs *RepoSuite) TestConsistentSnapshot(c *C) {
 
 func (rs *RepoSuite) TestExpiresAndVersion(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := MemoryStore(make(map[string]json.RawMessage), files)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1033,7 +1035,7 @@ func (rs *RepoSuite) TestExpiresAndVersion(c *C) {
 		r.SnapshotWithExpires(past),
 		r.TimestampWithExpires(past),
 	} {
-		c.Assert(err, Equals, ErrInvalidExpires{past})
+		c.Assert(err, Equals, tuf.ErrInvalidExpires{past})
 	}
 
 	genKey(c, r, "root")
@@ -1135,7 +1137,7 @@ func (rs *RepoSuite) TestExpiresAndVersion(c *C) {
 
 func (rs *RepoSuite) TestHashAlgorithm(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := MemoryStore(make(map[string]json.RawMessage), files)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
 	type hashTest struct {
 		args     []string
 		expected []string
@@ -1187,11 +1189,11 @@ func testPassphraseFunc(p []byte) util.PassphraseFunc {
 func (rs *RepoSuite) TestKeyPersistence(c *C) {
 	tmp := newTmpDir(c)
 	passphrase := []byte("s3cr3t")
-	store := FileSystemStore(tmp.path, testPassphraseFunc(passphrase))
+	store := repo.FileSystemStore(tmp.path, testPassphraseFunc(passphrase))
 
 	assertKeys := func(role string, enc bool, expected []*data.PrivateKey) {
 		keysJSON := tmp.readFile("keys/" + role + ".json")
-		pk := &persistedKeys{}
+		pk := &repo.PersistedKeys{}
 		c.Assert(json.Unmarshal(keysJSON, pk), IsNil)
 
 		// check the persisted keys are correct
@@ -1238,10 +1240,10 @@ func (rs *RepoSuite) TestKeyPersistence(c *C) {
 	assertKeys("root", true, []*data.PrivateKey{privateKey, newPrivateKey})
 
 	// check saving a key to an encrypted file without a passphrase fails
-	insecureStore := FileSystemStore(tmp.path, nil)
+	insecureStore := repo.FileSystemStore(tmp.path, nil)
 	signer, err = keys.GenerateEd25519Key()
 	c.Assert(err, IsNil)
-	c.Assert(insecureStore.SaveSigner("root", signer), Equals, ErrPassphraseRequired{"root"})
+	c.Assert(insecureStore.SaveSigner("root", signer), Equals, repo.ErrPassphraseRequired{"root"})
 
 	// save a key to an insecure store and check it is not encrypted
 	signer, err = keys.GenerateEd25519Key()
@@ -1254,7 +1256,7 @@ func (rs *RepoSuite) TestKeyPersistence(c *C) {
 
 func (rs *RepoSuite) TestManageMultipleTargets(c *C) {
 	tmp := newTmpDir(c)
-	local := FileSystemStore(tmp.path, nil)
+	local := repo.FileSystemStore(tmp.path, nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 	// don't use consistent snapshots to make the checks simpler
@@ -1322,7 +1324,7 @@ func (rs *RepoSuite) TestCustomTargetMetadata(c *C) {
 		"bar.txt": []byte("bar"),
 		"baz.txt": []byte("baz"),
 	}
-	local := MemoryStore(make(map[string]json.RawMessage), files)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1354,8 +1356,8 @@ func (rs *RepoSuite) TestCustomTargetMetadata(c *C) {
 }
 
 func (rs *RepoSuite) TestUnknownKeyIDs(c *C) {
-	// generate a repo
-	local := MemoryStore(make(map[string]json.RawMessage), nil)
+	// generate a storage
+	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1423,7 +1425,7 @@ func (rs *RepoSuite) TestUnknownKeyIDs(c *C) {
 }
 
 func (rs *RepoSuite) TestThreshold(c *C) {
-	local := MemoryStore(make(map[string]json.RawMessage), nil)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), nil)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1447,7 +1449,7 @@ func (rs *RepoSuite) TestThreshold(c *C) {
 	t, err = r.GetThreshold("root")
 	c.Assert(err, IsNil)
 	c.Assert(t, Equals, 2)
-	c.Assert(r.Commit(), DeepEquals, ErrNotEnoughKeys{"root", 1, 2})
+	c.Assert(r.Commit(), DeepEquals, tuf.ErrNotEnoughKeys{"root", 1, 2})
 
 	// Add a second root key and try again
 	genKey(c, r, "root")
@@ -1476,7 +1478,7 @@ func (rs *RepoSuite) TestThreshold(c *C) {
 
 func (rs *RepoSuite) TestAddOrUpdateSignatures(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := MemoryStore(make(map[string]json.RawMessage), files)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1549,7 +1551,7 @@ func (rs *RepoSuite) TestAddOrUpdateSignatures(c *C) {
 
 func (rs *RepoSuite) TestBadAddOrUpdateSignatures(c *C) {
 	files := map[string][]byte{"foo.txt": []byte("foo")}
-	local := MemoryStore(make(map[string]json.RawMessage), files)
+	local := repo.MemoryStore(make(map[string]json.RawMessage), files)
 	r, err := NewRepo(local)
 	c.Assert(err, IsNil)
 
@@ -1578,7 +1580,7 @@ func (rs *RepoSuite) TestBadAddOrUpdateSignatures(c *C) {
 	for _, id := range rootKey.PublicData().IDs() {
 		c.Assert(r.AddOrUpdateSignature("invalid_root.json", data.Signature{
 			KeyID:     id,
-			Signature: rootSig}), Equals, ErrInvalidRole{"invalid_root"})
+			Signature: rootSig}), Equals, tuf.ErrInvalidRole{"invalid_root"})
 	}
 
 	// add a root signature with an key ID that is for the targets role

@@ -1,7 +1,6 @@
-package tuf
+package repo
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -15,104 +14,7 @@ import (
 	"github.com/theupdateframework/go-tuf/util"
 )
 
-func signers(privateKeys []*data.PrivateKey) []keys.Signer {
-	res := make([]keys.Signer, 0, len(privateKeys))
-	for _, k := range privateKeys {
-		signer, err := keys.GetSigner(k)
-		if err != nil {
-			continue
-		}
-		res = append(res, signer)
-	}
-	return res
-}
-
-func MemoryStore(meta map[string]json.RawMessage, files map[string][]byte) LocalStore {
-	if meta == nil {
-		meta = make(map[string]json.RawMessage)
-	}
-	return &memoryStore{
-		meta:       meta,
-		stagedMeta: make(map[string]json.RawMessage),
-		files:      files,
-		signers:    make(map[string][]keys.Signer),
-	}
-}
-
-type memoryStore struct {
-	meta       map[string]json.RawMessage
-	stagedMeta map[string]json.RawMessage
-	files      map[string][]byte
-	signers    map[string][]keys.Signer
-}
-
-func (m *memoryStore) GetMeta() (map[string]json.RawMessage, error) {
-	meta := make(map[string]json.RawMessage, len(m.meta)+len(m.stagedMeta))
-	for key, value := range m.meta {
-		meta[key] = value
-	}
-	for key, value := range m.stagedMeta {
-		meta[key] = value
-	}
-	return meta, nil
-}
-
-func (m *memoryStore) SetMeta(name string, meta json.RawMessage) error {
-	m.stagedMeta[name] = meta
-	return nil
-}
-
-func (m *memoryStore) WalkStagedTargets(paths []string, targetsFn TargetsWalkFunc) error {
-	if len(paths) == 0 {
-		for path, data := range m.files {
-			if err := targetsFn(path, bytes.NewReader(data)); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	for _, path := range paths {
-		data, ok := m.files[path]
-		if !ok {
-			return ErrFileNotFound{path}
-		}
-		if err := targetsFn(path, bytes.NewReader(data)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (m *memoryStore) Commit(consistentSnapshot bool, versions map[string]int, hashes map[string]data.Hashes) error {
-	for name, meta := range m.stagedMeta {
-		paths := computeMetadataPaths(consistentSnapshot, name, versions)
-		for _, path := range paths {
-			m.meta[path] = meta
-		}
-	}
-	return nil
-}
-
-func (m *memoryStore) GetSigners(role string) ([]keys.Signer, error) {
-	return m.signers[role], nil
-}
-
-func (m *memoryStore) SaveSigner(role string, signer keys.Signer) error {
-	m.signers[role] = append(m.signers[role], signer)
-	return nil
-}
-
-func (m *memoryStore) Clean() error {
-	return nil
-}
-
-type persistedKeys struct {
-	Encrypted bool            `json:"encrypted"`
-	Data      json.RawMessage `json:"data"`
-}
-
-func FileSystemStore(dir string, p util.PassphraseFunc) LocalStore {
+func FileSystemStore(dir string, p util.PassphraseFunc) RepoStore {
 	return &fileSystemStore{
 		dir:            dir,
 		passphraseFunc: p,
@@ -143,7 +45,7 @@ func (f *fileSystemStore) GetMeta() (map[string]json.RawMessage, error) {
 		_, err := os.Stat(path)
 		return os.IsNotExist(err)
 	}
-	for _, name := range topLevelMetadata {
+	for _, name := range TopLevelMetadata {
 		path := filepath.Join(f.stagedDir(), name)
 		if notExists(path) {
 			path = filepath.Join(f.repoDir(), name)
@@ -358,7 +260,7 @@ func (f *fileSystemStore) SaveSigner(role string, signer keys.Signer) error {
 		}
 	}
 
-	pk := &persistedKeys{}
+	pk := &PersistedKeys{}
 	if pass != nil {
 		pk.Data, err = encrypted.Marshal(keys, pass)
 		if err != nil {
@@ -391,7 +293,7 @@ func (f *fileSystemStore) loadPrivateKeys(role string) ([]*data.PrivateKey, []by
 	}
 	defer file.Close()
 
-	pk := &persistedKeys{}
+	pk := &PersistedKeys{}
 	if err := json.NewDecoder(file).Decode(pk); err != nil {
 		return nil, nil, err
 	}
@@ -471,3 +373,4 @@ func computeMetadataPaths(consistentSnapshot bool, name string, versions map[str
 
 	return paths
 }
+

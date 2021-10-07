@@ -1,10 +1,10 @@
 package main
 
 import (
+	"github.com/theupdateframework/go-tuf/repo"
 	"log"
 
 	"github.com/flynn/go-docopt"
-	"github.com/theupdateframework/go-tuf"
 )
 
 func init() {
@@ -18,7 +18,7 @@ form of TUF_{{ROLE}}_PASSPHRASE
 `)
 }
 
-func cmdRegenerate(args *docopt.Args, repo *tuf.Repo) error {
+func cmdRegenerate(args *docopt.Args, repo *repo.Repo) error {
 	// TODO: implement this
 	log.Println("Not supported yet")
 	return nil

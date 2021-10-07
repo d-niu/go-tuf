@@ -1,9 +1,12 @@
-package tuf
+package repo
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/theupdateframework/go-tuf"
+	"github.com/theupdateframework/go-tuf/storage/repo"
+
 	"io"
 	"path"
 	"strings"
@@ -17,51 +20,13 @@ import (
 	"github.com/theupdateframework/go-tuf/verify"
 )
 
-// topLevelMetadata determines the order signatures are verified when committing.
-var topLevelMetadata = []string{
-	"root.json",
-	"targets.json",
-	"snapshot.json",
-	"timestamp.json",
-}
-
 var snapshotMetadata = []string{
 	"root.json",
 	"targets.json",
 }
 
-// TargetsWalkFunc is a function of a target path name and a target payload used to
-// execute some function on each staged target file. For example, it may normalize path
-// names and generate target file metadata with additional custom metadata.
-type TargetsWalkFunc func(path string, target io.Reader) error
-
-type LocalStore interface {
-	// GetMeta returns a map from metadata file names (e.g. root.json) to their raw JSON payload or an error.
-	GetMeta() (map[string]json.RawMessage, error)
-
-	// SetMeta is used to update a metadata file name with a JSON payload.
-	SetMeta(string, json.RawMessage) error
-
-	// WalkStagedTargets calls targetsFn for each staged target file in paths.
-	//
-	// If paths is empty, all staged target files will be walked.
-	WalkStagedTargets(paths []string, targetsFn TargetsWalkFunc) error
-
-	// Commit is used to publish staged files to the repository
-	Commit(bool, map[string]int, map[string]data.Hashes) error
-
-	// GetSigners return a list of signers for a role.
-	GetSigners(string) ([]keys.Signer, error)
-
-	// SavePrivateKey adds a signer to a role.
-	SaveSigner(string, keys.Signer) error
-
-	// Clean is used to remove all staged metadata files.
-	Clean() error
-}
-
 type Repo struct {
-	local          LocalStore
+	local          repo.RepoStore
 	hashAlgorithms []string
 	meta           map[string]json.RawMessage
 	prefix         string
@@ -73,11 +38,11 @@ type Repo struct {
 	versionUpdated map[string]struct{}
 }
 
-func NewRepo(local LocalStore, hashAlgorithms ...string) (*Repo, error) {
+func NewRepo(local repo.RepoStore, hashAlgorithms ...string) (*Repo, error) {
 	return NewRepoIndent(local, "", "", hashAlgorithms...)
 }
 
-func NewRepoIndent(local LocalStore, prefix string, indent string, hashAlgorithms ...string) (*Repo, error) {
+func NewRepoIndent(local repo.RepoStore, prefix string, indent string, hashAlgorithms ...string) (*Repo, error) {
 	r := &Repo{
 		local:          local,
 		hashAlgorithms: hashAlgorithms,
@@ -100,7 +65,7 @@ func (r *Repo) Init(consistentSnapshot bool) error {
 		return err
 	}
 	if len(t.Targets) > 0 {
-		return ErrInitNotAllowed
+		return tuf.ErrInitNotAllowed
 	}
 	root := data.NewRoot()
 	root.ConsistentSnapshot = consistentSnapshot
@@ -181,7 +146,7 @@ func (r *Repo) GetThreshold(keyRole string) (int, error) {
 	}
 	role, ok := root.Roles[keyRole]
 	if !ok {
-		return -1, ErrInvalidRole{keyRole}
+		return -1, tuf.ErrInvalidRole{keyRole}
 	}
 
 	return role.Threshold, nil
@@ -191,7 +156,7 @@ func (r *Repo) SetThreshold(keyRole string, t int) error {
 	if !validMetadata(keyRole + ".json") {
 		// Delegations are not currently supported, so return an error if this is not a
 		// top-level metadata file.
-		return ErrInvalidRole{keyRole}
+		return tuf.ErrInvalidRole{keyRole}
 	}
 	root, err := r.root()
 	if err != nil {
@@ -199,7 +164,7 @@ func (r *Repo) SetThreshold(keyRole string, t int) error {
 	}
 	role, ok := root.Roles[keyRole]
 	if !ok {
-		return ErrInvalidRole{keyRole}
+		return tuf.ErrInvalidRole{keyRole}
 	}
 	if role.Threshold == t {
 		// Change was a no-op.
@@ -330,11 +295,11 @@ func (r *Repo) AddPrivateKey(role string, signer keys.Signer) error {
 
 func (r *Repo) AddPrivateKeyWithExpires(keyRole string, signer keys.Signer, expires time.Time) error {
 	if !verify.ValidRole(keyRole) {
-		return ErrInvalidRole{keyRole}
+		return tuf.ErrInvalidRole{keyRole}
 	}
 
 	if !validExpires(expires) {
-		return ErrInvalidExpires{expires}
+		return tuf.ErrInvalidExpires{expires}
 	}
 
 	if err := r.local.SaveSigner(keyRole, signer); err != nil {
@@ -429,11 +394,11 @@ func (r *Repo) RevokeKey(role, id string) error {
 
 func (r *Repo) RevokeKeyWithExpires(keyRole, id string, expires time.Time) error {
 	if !verify.ValidRole(keyRole) {
-		return ErrInvalidRole{keyRole}
+		return tuf.ErrInvalidRole{keyRole}
 	}
 
 	if !validExpires(expires) {
-		return ErrInvalidExpires{expires}
+		return tuf.ErrInvalidExpires{expires}
 	}
 
 	root, err := r.root()
@@ -443,12 +408,12 @@ func (r *Repo) RevokeKeyWithExpires(keyRole, id string, expires time.Time) error
 
 	key, ok := root.Keys[id]
 	if !ok {
-		return ErrKeyNotFound{keyRole, id}
+		return tuf.ErrKeyNotFound{keyRole, id}
 	}
 
 	role, ok := root.Roles[keyRole]
 	if !ok {
-		return ErrKeyNotFound{keyRole, id}
+		return tuf.ErrKeyNotFound{keyRole, id}
 	}
 
 	keyIDs := make([]string, 0, len(role.KeyIDs))
@@ -462,7 +427,7 @@ func (r *Repo) RevokeKeyWithExpires(keyRole, id string, expires time.Time) error
 		keyIDs = append(keyIDs, keyID)
 	}
 	if len(keyIDs) == len(role.KeyIDs) {
-		return ErrKeyNotFound{keyRole, id}
+		return tuf.ErrKeyNotFound{keyRole, id}
 	}
 	role.KeyIDs = keyIDs
 
@@ -517,7 +482,7 @@ func (r *Repo) setMeta(roleFilename string, meta interface{}) error {
 func (r *Repo) Sign(roleFilename string) error {
 	role := strings.TrimSuffix(roleFilename, ".json")
 	if !verify.ValidRole(role) {
-		return ErrInvalidRole{role}
+		return tuf.ErrInvalidRole{role}
 	}
 
 	s, err := r.SignedMeta(roleFilename)
@@ -530,7 +495,7 @@ func (r *Repo) Sign(roleFilename string) error {
 		return err
 	}
 	if len(keys) == 0 {
-		return ErrInsufficientKeys{roleFilename}
+		return tuf.ErrInsufficientKeys{roleFilename}
 	}
 	for _, k := range keys {
 		sign.Sign(s, k)
@@ -549,7 +514,7 @@ func (r *Repo) Sign(roleFilename string) error {
 func (r *Repo) AddOrUpdateSignature(roleFilename string, signature data.Signature) error {
 	role := strings.TrimSuffix(roleFilename, ".json")
 	if !verify.ValidRole(role) {
-		return ErrInvalidRole{role}
+		return tuf.ErrInvalidRole{role}
 	}
 
 	// Check key ID is in valid for the role.
@@ -559,7 +524,7 @@ func (r *Repo) AddOrUpdateSignature(roleFilename string, signature data.Signatur
 	}
 	roleData := db.GetRole(role)
 	if roleData == nil {
-		return ErrInvalidRole{role}
+		return tuf.ErrInvalidRole{role}
 	}
 	if !roleData.ValidKey(signature.KeyID) {
 		return verify.ErrInvalidKey
@@ -637,7 +602,7 @@ func (r *Repo) getSigningKeys(name string) ([]keys.Signer, error) {
 func (r *Repo) SignedMeta(roleFilename string) (*data.Signed, error) {
 	b, ok := r.meta[roleFilename]
 	if !ok {
-		return nil, ErrMissingMetadata{roleFilename}
+		return nil, tuf.ErrMissingMetadata{roleFilename}
 	}
 	s := &data.Signed{}
 	if err := json.Unmarshal(b, s); err != nil {
@@ -647,7 +612,7 @@ func (r *Repo) SignedMeta(roleFilename string) (*data.Signed, error) {
 }
 
 func validMetadata(roleFilename string) bool {
-	for _, m := range topLevelMetadata {
+	for _, m := range repo.TopLevelMetadata {
 		if m == roleFilename {
 			return true
 		}
@@ -669,7 +634,7 @@ func (r *Repo) AddTargetWithExpires(path string, custom json.RawMessage, expires
 
 func (r *Repo) AddTargetsWithExpires(paths []string, custom json.RawMessage, expires time.Time) error {
 	if !validExpires(expires) {
-		return ErrInvalidExpires{expires}
+		return tuf.ErrInvalidExpires{expires}
 	}
 
 	t, err := r.targets()
@@ -725,7 +690,7 @@ func (r *Repo) RemoveTargetWithExpires(path string, expires time.Time) error {
 // If paths is empty, all targets will be removed.
 func (r *Repo) RemoveTargetsWithExpires(paths []string, expires time.Time) error {
 	if !validExpires(expires) {
-		return ErrInvalidExpires{expires}
+		return tuf.ErrInvalidExpires{expires}
 	}
 
 	t, err := r.targets()
@@ -764,7 +729,7 @@ func (r *Repo) Snapshot() error {
 
 func (r *Repo) SnapshotWithExpires(expires time.Time) error {
 	if !validExpires(expires) {
-		return ErrInvalidExpires{expires}
+		return tuf.ErrInvalidExpires{expires}
 	}
 
 	snapshot, err := r.snapshot()
@@ -800,7 +765,7 @@ func (r *Repo) Timestamp() error {
 
 func (r *Repo) TimestampWithExpires(expires time.Time) error {
 	if !validExpires(expires) {
-		return ErrInvalidExpires{expires}
+		return tuf.ErrInvalidExpires{expires}
 	}
 
 	db, err := r.db()
@@ -877,9 +842,9 @@ func (r *Repo) fileHashes() (map[string]data.Hashes, error) {
 
 func (r *Repo) Commit() error {
 	// check we have all the metadata
-	for _, name := range topLevelMetadata {
+	for _, name := range repo.TopLevelMetadata {
 		if _, ok := r.meta[name]; !ok {
-			return ErrMissingMetadata{name}
+			return tuf.ErrMissingMetadata{name}
 		}
 	}
 
@@ -890,7 +855,7 @@ func (r *Repo) Commit() error {
 	}
 	for name, role := range root.Roles {
 		if len(role.KeyIDs) < role.Threshold {
-			return ErrNotEnoughKeys{name, len(role.KeyIDs), role.Threshold}
+			return tuf.ErrNotEnoughKeys{name, len(role.KeyIDs), role.Threshold}
 		}
 	}
 
@@ -931,7 +896,7 @@ func (r *Repo) Commit() error {
 	if err != nil {
 		return err
 	}
-	for _, name := range topLevelMetadata {
+	for _, name := range repo.TopLevelMetadata {
 		if err := r.verifySignature(name, db); err != nil {
 			return err
 		}
@@ -968,7 +933,7 @@ func (r *Repo) verifySignature(roleFilename string, db *verify.DB) error {
 	}
 	role := strings.TrimSuffix(roleFilename, ".json")
 	if err := db.Verify(s, role, 0); err != nil {
-		return ErrInsufficientSignatures{roleFilename, err}
+		return tuf.ErrInsufficientSignatures{roleFilename, err}
 	}
 	return nil
 }
@@ -976,7 +941,7 @@ func (r *Repo) verifySignature(roleFilename string, db *verify.DB) error {
 func (r *Repo) snapshotFileMeta(roleFilename string) (data.SnapshotFileMeta, error) {
 	b, ok := r.meta[roleFilename]
 	if !ok {
-		return data.SnapshotFileMeta{}, ErrMissingMetadata{roleFilename}
+		return data.SnapshotFileMeta{}, tuf.ErrMissingMetadata{roleFilename}
 	}
 	return util.GenerateSnapshotFileMeta(bytes.NewReader(b), r.hashAlgorithms...)
 }
@@ -984,7 +949,7 @@ func (r *Repo) snapshotFileMeta(roleFilename string) (data.SnapshotFileMeta, err
 func (r *Repo) timestampFileMeta(roleFilename string) (data.TimestampFileMeta, error) {
 	b, ok := r.meta[roleFilename]
 	if !ok {
-		return data.TimestampFileMeta{}, ErrMissingMetadata{roleFilename}
+		return data.TimestampFileMeta{}, tuf.ErrMissingMetadata{roleFilename}
 	}
 	return util.GenerateTimestampFileMeta(bytes.NewReader(b), r.hashAlgorithms...)
 }

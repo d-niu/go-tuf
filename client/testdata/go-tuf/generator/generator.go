@@ -3,6 +3,8 @@ package generator
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/theupdateframework/go-tuf/repo"
+	repo2 "github.com/theupdateframework/go-tuf/storage/repo"
 	"io/ioutil"
 	"log"
 	"os"
@@ -10,7 +12,6 @@ import (
 	"path/filepath"
 	"time"
 
-	tuf "github.com/theupdateframework/go-tuf"
 	"github.com/theupdateframework/go-tuf/data"
 	"github.com/theupdateframework/go-tuf/pkg/keys"
 )
@@ -33,14 +34,14 @@ func copyRepo(src string, dst string) {
 	assertNotNil(cmd.Run())
 }
 
-func newRepo(dir string) *tuf.Repo {
-	repo, err := tuf.NewRepoIndent(tuf.FileSystemStore(dir, nil), "", "\t")
+func newRepo(dir string) *repo.Repo {
+	repo, err := repo.NewRepoIndent(repo2.FileSystemStore(dir, nil), "", "\t")
 	assertNotNil(err)
 
 	return repo
 }
 
-func commit(dir string, repo *tuf.Repo) {
+func commit(dir string, repo *repo.Repo) {
 	assertNotNil(repo.SnapshotWithExpires(expirationDate))
 	assertNotNil(repo.TimestampWithExpires(expirationDate))
 	assertNotNil(repo.Commit())
@@ -49,7 +50,7 @@ func commit(dir string, repo *tuf.Repo) {
 	assertNotNil(os.RemoveAll(filepath.Join(dir, "keys")))
 }
 
-func addKeys(repo *tuf.Repo, roleKeys map[string][]*data.PrivateKey) {
+func addKeys(repo *repo.Repo, roleKeys map[string][]*data.PrivateKey) {
 	for role, keyList := range roleKeys {
 		for _, key := range keyList {
 			signer, err := keys.GetSigner(key)
@@ -59,7 +60,7 @@ func addKeys(repo *tuf.Repo, roleKeys map[string][]*data.PrivateKey) {
 	}
 }
 
-func addTargets(repo *tuf.Repo, dir string, files map[string][]byte) {
+func addTargets(repo *repo.Repo, dir string, files map[string][]byte) {
 	paths := []string{}
 	for file, data := range files {
 		path := filepath.Join(dir, "staged", "targets", file)
@@ -70,7 +71,7 @@ func addTargets(repo *tuf.Repo, dir string, files map[string][]byte) {
 	assertNotNil(repo.AddTargetsWithExpires(paths, nil, expirationDate))
 }
 
-func revokeKeys(repo *tuf.Repo, role string, keyList []*data.PrivateKey) {
+func revokeKeys(repo *repo.Repo, role string, keyList []*data.PrivateKey) {
 	for _, key := range keyList {
 		signer, err := keys.GetSigner(key)
 		assertNotNil(err)
@@ -88,7 +89,7 @@ func generateRepos(dir string, roleKeys map[string][][]*data.PrivateKey, consist
 		"timestamp": roleKeys["timestamp"][0],
 	}
 
-	// Create the initial repo.
+	// Create the initial storage.
 	dir0 := filepath.Join(dir, "0")
 	repo0 := newRepo(dir0)
 	repo0.Init(consistentSnapshot)
@@ -100,7 +101,7 @@ func generateRepos(dir string, roleKeys map[string][][]*data.PrivateKey, consist
 	oldDir := dir0
 	i := 1
 	for _, role := range []string{"root", "targets", "snapshot", "timestamp"} {
-		// Setup the repo.
+		// Setup the storage.
 		stepName := fmt.Sprintf("%d", i)
 		d := filepath.Join(dir, stepName)
 		copyRepo(oldDir, d)

@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/theupdateframework/go-tuf/repo"
 	"strconv"
 
 	"github.com/flynn/go-docopt"
-	"github.com/theupdateframework/go-tuf"
 )
 
 func init() {
@@ -16,7 +16,7 @@ Set the threshold for a role.
 `)
 }
 
-func cmdSetThreshold(args *docopt.Args, repo *tuf.Repo) error {
+func cmdSetThreshold(args *docopt.Args, repo *repo.Repo) error {
 	role := args.String["<role>"]
 	thresholdStr := args.String["<threshold>"]
 	threshold, err := strconv.Atoi(thresholdStr)

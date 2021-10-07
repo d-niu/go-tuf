@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/flynn/go-docopt"
-	"github.com/theupdateframework/go-tuf"
+	"github.com/theupdateframework/go-tuf/repo"
 )
 
 func init() {
@@ -18,6 +18,6 @@ initialized to do so when generating keys.
   `)
 }
 
-func cmdInit(args *docopt.Args, repo *tuf.Repo) error {
+func cmdInit(args *docopt.Args, repo *repo.Repo) error {
 	return repo.Init(args.String["--consistent-snapshot"] != "false")
 }

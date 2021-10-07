@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/theupdateframework/go-tuf/repo"
 	"log"
 	"os"
 	"strconv"
@@ -77,7 +78,7 @@ See "tuf help <command>" for more information on a specific command
 	}
 }
 
-type cmdFunc func(*docopt.Args, *tuf.Repo) error
+type cmdFunc func(*docopt.Args, *repo.Repo) error
 
 type command struct {
 	usage string
@@ -109,7 +110,7 @@ func runCommand(name string, args []string, dir string, insecure bool) error {
 	if !insecure {
 		p = getPassphrase
 	}
-	repo, err := tuf.NewRepo(tuf.FileSystemStore(dir, p))
+	repo, err := repo.NewRepo(tuf.FileSystemStore(dir, p))
 	if err != nil {
 		return err
 	}
