@@ -10,8 +10,6 @@ type KMSClient interface {
 	CreateKey(params map[string]interface{}, keyname string) (err error)
 
 	//fetch signer and verifier for the key <- delegations
-
-	//TODO: fix ciphertext naming
 	Sign(params map[string]interface{}, keyname string) (signature string, err error)
 
 	Verify(params map[string]interface{}, keyname string) (verified bool, err error)
@@ -31,7 +29,5 @@ type CryptoManager interface {
 
 	//Ideally: initialize tuf client with details for the Signer backend
 		//Right now: client.db <- client specific map
-
-
 
 }
