@@ -20,7 +20,6 @@ type PartialClient struct {
 	rootVersion    uint64
 	targetsVersion uint64
 	targetMetas    data.TargetFiles
-	//targetFiles []*pbgo.File //pbgo is dataadog specific so it's probably not waht we want
 }
 
 type partialClientLocalStore struct {
